@@ -24,25 +24,65 @@ function flattenCatalog() {
   )
 }
 
+function hasAny(text, terms) {
+  return terms.some((term) => text.includes(term))
+}
+
 function prefilter(query, limit = 24) {
   const q = normalize(query)
   const words = q.split(/\s+/).filter((w) => w.length > 2)
   const catalog = flattenCatalog()
+  const toolIntent = hasAny(q, ['herramienta', 'herramientas', 'reforma', 'bricolaje', 'arreglar', 'montar', 'taladro', 'destornillador', 'tornillo', 'tornillos', 'cinta', 'llave', 'guante', 'linterna', 'ferreteria', 'casa'])
+  const candyIntent = hasAny(q, ['anillo', 'caramelo', 'gominola', 'dulce', 'chuche'])
+  const giftIntent = hasAny(q, ['regalo', 'nino', 'niño', 'infantil', 'juguete'])
+  const cheapIntent = hasAny(q, ['barato', 'menos de 5', 'menos de cinco', 'economico', 'económico'])
+  const routeIntent = hasAny(q, ['ruta', 'paseo', 'recorrido'])
+
   const scored = catalog.map((item) => {
     const hay = normalize(`${item.productName} ${item.description} ${item.merchantName} ${item.sector} ${item.city}`)
+    const sector = normalize(item.sector)
+    const product = normalize(item.productName)
     let score = 0
+
     for (const w of words) if (hay.includes(w)) score += 2
-    if (q.includes('pinza') && hay.includes('pinza')) score += 8
-    if (q.includes('anillo') && hay.includes('anillo')) score += 8
-    if ((q.includes('niño') || q.includes('nino') || q.includes('regalo')) && ['juguetes', 'dulces', 'regalos', 'souvenirs'].includes(normalize(item.sector))) score += 5
-    if ((q.includes('barato') || q.includes('menos de 5') || q.includes('menos de cinco')) && item.price <= 5) score += 6
-    if (q.includes('ruta') && item.city === 'Barcelona') score += 4
+
+    if (toolIntent) {
+      if (sector.includes('ferreteria')) score += 14
+      if (hasAny(product, ['destornillador', 'cinta', 'llave', 'guante', 'brida', 'cola', 'linterna', 'alcayata', 'pila', 'metro', 'tornillo', 'cuter', 'brocha', 'silicona', 'pinza'])) score += 12
+      if (hasAny(normalize(item.merchantName), ['ferreteria', 'ferretería'])) score += 10
+      if (sector.includes('dulces') || product.includes('anillo')) score -= 50
+    }
+
+    if (candyIntent) {
+      if (sector.includes('dulces')) score += 10
+      if (hasAny(product, ['anillo', 'caramelo', 'mix', 'regaliz', 'nube', 'piruleta', 'mora'])) score += 10
+    }
+
+    if (giftIntent) {
+      if (['juguetes', 'dulces', 'regalos', 'souvenirs'].includes(sector)) score += 7
+      if (hasAny(product, ['puzzle', 'peluche', 'cartas', 'peonza', 'juego', 'caramelo', 'taza', 'iman', 'imán'])) score += 5
+    }
+
+    if (cheapIntent && item.price <= 5) score += 8
+    if (routeIntent && item.city === 'Barcelona') score += 5
+    if (q.includes('pinza') && product.includes('pinza')) score += 12
+    if (q.includes('anillo') && product.includes('anillo')) score += 12
+
     return { ...item, score }
   }).filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score || a.price - b.price)
     .slice(0, limit)
 
-  return scored.length ? scored : catalog.sort((a, b) => a.price - b.price).slice(0, limit)
+  if (scored.length) return scored
+
+  if (toolIntent) {
+    return catalog
+      .filter((item) => normalize(item.sector).includes('ferreteria'))
+      .sort((a, b) => a.price - b.price)
+      .slice(0, limit)
+  }
+
+  return catalog.sort((a, b) => a.price - b.price).slice(0, limit)
 }
 
 function fallbackAnswer(query, candidates) {
@@ -70,7 +110,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ ...fallbackAnswer(query, candidates), source: 'fallback' })
   }
 
-  const prompt = `Eres JuanIA, asistente de compra local de faciliteaGO. Recomienda SOLO productos de la lista de candidatos. No inventes comercios ni productos. Devuelve JSON válido sin markdown con esta forma: {"answer":"texto breve y natural","recommendations":[{"merchantId":"","merchantName":"","productId":"","productName":"","price":0,"reason":"motivo"}]}. Máximo 4 recomendaciones. Menciona cashback del 4% si aporta valor. Cupón disponible: ${CODE}. Consulta del usuario: ${query}. Candidatos: ${JSON.stringify(candidates)}`
+  const prompt = `Eres JuanIA, asistente de compra local de faciliteaGO. Recomienda SOLO productos de la lista de candidatos. No inventes comercios ni productos. Si el usuario pide herramientas, reforma o bricolaje, prioriza productos de ferretería y excluye dulces salvo que los pida expresamente. Devuelve JSON válido sin markdown con esta forma: {"answer":"texto breve y natural","recommendations":[{"merchantId":"","merchantName":"","productId":"","productName":"","price":0,"reason":"motivo"}]}. Máximo 4 recomendaciones. Menciona cashback del 4% si aporta valor. Cupón disponible: ${CODE}. Consulta del usuario: ${query}. Candidatos: ${JSON.stringify(candidates)}`
 
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
