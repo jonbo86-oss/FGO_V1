@@ -1,6 +1,7 @@
 import React from 'react'
 import AppManualCoupon from './AppManualCoupon.jsx'
 import GeminiJuanIA from './GeminiJuanIA.jsx'
+import HomeEnhancements from './HomeEnhancements.jsx'
 
 export default function AppGeminiShell(){
   return <>
@@ -11,6 +12,7 @@ export default function AppGeminiShell(){
       .gemini-juanias-panel{display:block;}
     `}</style>
     <AppManualCoupon/>
+    <HomeEnhancements/>
     <GeminiJuanIA/>
   </>
 }
