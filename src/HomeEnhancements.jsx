@@ -18,7 +18,7 @@ function buildHtml(){
       <span class="fgo-kicker">Reembolso y financiación</span>
       <h2>Disfruta ahora, paga después y recibe tu cashback.</h2>
       <p>Paga tu compra en 4 cuotas, sin intereses, y conserva tus ventajas faciliteaGO en comercios locales adheridos.</p>
-      <button type="button">Consigue tu cashback</button>
+      <button type="button" class="fgo-cashback-cta">Consigue tu cashback</button>
     </div>
     <div class="fgo-phone-card">
       <img src="${phone}" alt="Compra confirmada en móvil"/>
@@ -71,6 +71,14 @@ export default function HomeEnhancements(){
       document.head.appendChild(style)
     }
     const rootId='fgo-home-extra-root'
+    const onClick=e=>{
+      const btn=e.target.closest?.('.fgo-cashback-cta')
+      if(btn){
+        e.preventDefault()
+        window.dispatchEvent(new CustomEvent('fgo:navigate-cashback'))
+      }
+    }
+    document.addEventListener('click',onClick)
     const render=()=>{
       const existing=document.getElementById(rootId)
       const isHome=[...document.querySelectorAll('h1')].some(h=>h.textContent?.includes('Compra cerca'))
@@ -87,7 +95,7 @@ export default function HomeEnhancements(){
     render()
     const observer=new MutationObserver(render)
     observer.observe(document.body,{childList:true,subtree:true})
-    return()=>observer.disconnect()
+    return()=>{observer.disconnect();document.removeEventListener('click',onClick)}
   },[])
   return null
 }
